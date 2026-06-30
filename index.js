@@ -93,11 +93,29 @@ api.post("/coisas", async (req, res) => {
 
         if (!nome || !tipo) {
             return res.status(400).json({
-                erro: "Nome e tipo são obrigatórios."});
+                erro: "Nome e tipo são obrigatórios."
+            });
         }
-        await conn("coisas").insert({ nome, tipo });
+
+        await conn.transaction(async (trx) => {
+            
+            // Insere na tabela principal 'coisas' e recupera o ID gerado
+            const [coisa_id] = await trx("coisas").insert({ nome, tipo });
+
+            // 2. Insere na tabela filha correspondente usando o ID recuperado
+            if (tipo === "jogo") {
+                await trx("jogos").insert({ coisa_id });
+            } else if (tipo === "livro") {
+                await trx("livros").insert({ coisa_id });
+            } else if (tipo === "objeto") {
+                await trx("objetos").insert({ coisa_id });
+            } else {
+                throw new Error("Tipo de item inválido fornecido.");
+            }
+        });
+
         res.status(201).json({
-            mensagem: "Item cadastrado com sucesso!"
+            mensagem: "Item e subcategoria cadastrados com sucesso!"
         });
 
     } catch (erro) {
@@ -105,7 +123,6 @@ api.post("/coisas", async (req, res) => {
         res.status(500).json({ erro: "Erro ao cadastrar o item." });
     }
 });
-
 
 // PUT - atualizar coisa
 api.put("/coisas/:id", async (req, res) => {
