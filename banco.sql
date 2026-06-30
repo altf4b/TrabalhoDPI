@@ -8,6 +8,19 @@ CREATE TABLE coisas (
     tipo ENUM('jogo','livro','objeto') NOT NULL
 );
 
+CREATE TABLE tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE coisa_tags (
+    coisa_id INT NOT NULL,
+    tag_id INT NOT NULL,
+    PRIMARY KEY (coisa_id, tag_id),
+    FOREIGN KEY (coisa_id) REFERENCES coisas(id) ,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) 
+);
+
 CREATE TABLE jogos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     coisa_id INT NOT NULL,
