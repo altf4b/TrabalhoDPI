@@ -8,6 +8,8 @@ CREATE TABLE coisas (
     tipo ENUM('jogo','livro','objeto') NOT NULL
 );
 
+ALTER TABLE coisas ADD COLUMN estado_conservacao VARCHAR(50) DEFAULT 'Bom';
+
 CREATE TABLE tags (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(50) NOT NULL UNIQUE
