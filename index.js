@@ -19,6 +19,10 @@ const conn = knex({
     }
 });
 
+// ==========================================
+// ROTAS GET (VISUALIZAÇÃO)
+// ==========================================
+
 // GET - visualizar coisas
 api.get("/coisas", async (req, res) => {
     try {
@@ -63,8 +67,7 @@ api.get("/livros", async (req, res) => {
     }
 });
 
-
-// GET - emprestimos (COM JOIN)
+// GET - emprestimos
 api.get("/emprestimos", async (req, res) => {
     try {
         const emprestimos = await conn("emprestimos")
@@ -85,11 +88,27 @@ api.get("/emprestimos", async (req, res) => {
     }
 });
 
+// GET - listar todas as tags globais 
+api.get("/tags", async (req, res) => {
+    try {
+        const tags = await conn("tags").select("*");
+        res.status(200).json(tags);
+    } catch (erro) {
+        console.log(erro);
+        res.status(500).json({ erro: "Erro ao buscar as tags." });
+    }
+});
 
-// POST - coisas
+
+// ==========================================
+// ROTAS POST (CRIAÇÃO / CADASTRO)
+// ==========================================
+
+// POST - coisas 
 api.post("/coisas", async (req, res) => {
     try {
-        const { nome, tipo } = req.body;
+
+        const { nome, tipo, estado_conservacao, tags } = req.body;
 
         if (!nome || !tipo) {
             return res.status(400).json({
@@ -99,10 +118,14 @@ api.post("/coisas", async (req, res) => {
 
         await conn.transaction(async (trx) => {
             
-            // Insere na tabela principal 'coisas' e recupera o ID gerado
-            const [coisa_id] = await trx("coisas").insert({ nome, tipo });
 
-            // 2. Insere na tabela filha correspondente usando o ID recuperado
+            const [coisa_id] = await trx("coisas").insert({ 
+                nome, 
+                tipo,
+                estado_conservacao: estado_conservacao || "Bom"
+            });
+
+
             if (tipo === "jogo") {
                 await trx("jogos").insert({ coisa_id });
             } else if (tipo === "livro") {
@@ -112,10 +135,19 @@ api.post("/coisas", async (req, res) => {
             } else {
                 throw new Error("Tipo de item inválido fornecido.");
             }
+
+
+            if (tags && Array.isArray(tags) && tags.length > 0) {
+                const vinculoTags = tags.map(tag_id => ({
+                    coisa_id,
+                    tag_id
+                }));
+                await trx("coisa_tags").insert(vinculoTags);
+            }
         });
 
         res.status(201).json({
-            mensagem: "Item e subcategoria cadastrados com sucesso!"
+            mensagem: "Item, subcategoria e tags cadastrados com sucesso!"
         });
 
     } catch (erro) {
@@ -124,15 +156,69 @@ api.post("/coisas", async (req, res) => {
     }
 });
 
-// PUT - atualizar coisa
+// POST - realizar novo empréstimo 
+api.post("/emprestimos", async (req, res) => {
+    try {
+        const { coisa_id, nome_pessoa, data_emprestimo } = req.body;
+
+        if (!coisa_id || !nome_pessoa || !data_emprestimo) {
+            return res.status(400).json({
+                erro: "Item (coisa_id), nome da pessoa e data de empréstimo são obrigatórios."
+            });
+        }
+
+        await conn("emprestimos").insert({
+            coisa_id,
+            nome_pessoa,
+            data_emprestimo,
+            status: "emprestado"
+        });
+
+        res.status(201).json({
+            mensagem: "Empréstimo registrado com sucesso!"
+        });
+    } catch (erro) {
+        console.log(erro);
+        res.status(500).json({ erro: "Erro ao registrar o empréstimo." });
+    }
+});
+
+// POST - cadastrar uma nova tag global 
+api.post("/tags", async (req, res) => {
+    try {
+        const { nome } = req.body;
+
+        if (!nome) {
+            return res.status(400).json({
+                erro: "O nome da tag é obrigatório."
+            });
+        }
+
+        await conn("tags").insert({ nome });
+
+        res.status(201).json({
+            mensagem: "Tag global criada com sucesso!"
+        });
+    } catch (erro) {
+        console.log(erro);
+        res.status(500).json({ erro: "Erro ao criar a tag." });
+    }
+});
+
+
+// ==========================================
+// ROTAS PUT (ATUALIZAÇÃO)
+// ==========================================
+
+// PUT - atualizar coisa 
 api.put("/coisas/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome, tipo } = req.body;
+        const { nome, tipo, estado_conservacao } = req.body;
 
         await conn("coisas")
             .where({ id })
-            .update({ nome, tipo });
+            .update({ nome, tipo, estado_conservacao });
 
         res.status(200).json({
             mensagem: "Item atualizado com sucesso!"
@@ -153,7 +239,9 @@ api.put("/emprestimos/:id", async (req, res) => {
             .where({ id })
             .update({
                 status: "devolvido",
-                data_devolucao: new Date() });
+                data_devolucao: new Date() 
+            });
+            
         if (!atualizado) {
             return res.status(404).json({
                 erro: "Empréstimo não encontrado"
@@ -171,6 +259,10 @@ api.put("/emprestimos/:id", async (req, res) => {
     }
 });
 
+
+// ==========================================
+// ROTAS DELETE (EXCLUSÃO)
+// ==========================================
 
 // DELETE - coisas
 api.delete("/coisas/:id", (req, res, next) => {
@@ -191,8 +283,10 @@ api.delete("/coisas/:id", (req, res, next) => {
         .catch(next);
 });
 
+// DELETE - empréstimos
 api.delete("/emprestimos/:id", async (req, res) => {
-    try {const { id } = req.params;
+    try {
+        const { id } = req.params;
         const deletado = await conn("emprestimos")
             .where({ id })
             .del();
@@ -211,10 +305,9 @@ api.delete("/emprestimos/:id", async (req, res) => {
         res.status(500).json({
             erro: "Erro ao deletar empréstimo."
         });
-
     }
+});
 
-})
 
 api.listen(PORT, HOSTNAME, () => {
     console.log(`Servidor rodando em http://${HOSTNAME}:${PORT}`);
